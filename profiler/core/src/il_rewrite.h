@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <vector>
 #include "cor.h"
+#include "il_scan.h"
 
 // Prepend an arbitrary IL prefix to a method body and return a rebuilt, valid
 // method. We always emit a FAT header and shift every exception-clause offset by
@@ -120,6 +121,50 @@ inline bool RebuildWithPrefix(const BYTE* method, const BYTE* prefix, size_t pre
             sect = next + pad;
         }
     }
+    return true;
+}
+
+// Return capture: rewrite a method's final `ret` in place to
+// `dup; ldstr <label>; call TraceReturn(object,string); ret`, so the returned
+// object is logged. Safe only for single-trailing-ret, no-EH methods (validated
+// here); returns false otherwise so the caller skips capture. Reference return
+// only (the value is passed as object with no boxing).
+inline bool BuildReturnCaptureBody(const BYTE* method, mdString labelUs,
+                                   mdToken traceReturnTok, std::vector<BYTE>& out) {
+    BYTE b0 = method[0];
+    bool isTiny = (b0 & 0x3) == 0x2;
+    DWORD codeSize, localTok = 0, flags = 0;
+    WORD maxStack;
+    const BYTE* code;
+    if (isTiny) { codeSize = b0 >> 2; maxStack = 8; code = method + 1; }
+    else if ((b0 & 0x3) == 0x3) {
+        WORD w0 = *reinterpret_cast<const WORD*>(method);
+        flags = w0 & 0x0FFF;
+        DWORD hdrDwords = (w0 >> 12) & 0xF;
+        maxStack = *reinterpret_cast<const WORD*>(method + 2);
+        codeSize = *reinterpret_cast<const DWORD*>(method + 4);
+        localTok = *reinterpret_cast<const DWORD*>(method + 8);
+        code = method + hdrDwords * 4;
+        if (flags & 0x8) return false;   // has EH: not supported by in-place capture
+    } else return false;
+
+    if (codeSize < 1 || !ilscan::LastInstrIsLoneRet(code, codeSize)) return false;
+
+    out.clear();
+    DWORD newCode = codeSize + 11;
+    WORD  newMax = static_cast<WORD>(maxStack + 2);
+    DWORD hdrFlags = 0x3 | (flags & 0x10);   // fat + preserve InitLocals
+    auto put16 = [&](WORD v) { out.push_back(v & 0xFF); out.push_back((v >> 8) & 0xFF); };
+    auto put32 = [&](DWORD v) { for (int i = 0; i < 4; ++i) out.push_back((v >> (8 * i)) & 0xFF); };
+    put16(static_cast<WORD>((hdrFlags & 0x0FFF) | (3 << 12)));
+    put16(newMax);
+    put32(newCode);
+    put32(localTok);
+    out.insert(out.end(), code, code + (codeSize - 1));   // original minus final ret
+    out.push_back(0x25);                                  // dup
+    out.push_back(0x72); for (int i = 0; i < 4; ++i) out.push_back(static_cast<BYTE>((labelUs >> (8 * i)) & 0xFF));       // ldstr
+    out.push_back(0x28); for (int i = 0; i < 4; ++i) out.push_back(static_cast<BYTE>((traceReturnTok >> (8 * i)) & 0xFF)); // call
+    out.push_back(0x2A);                                  // ret
     return true;
 }
 

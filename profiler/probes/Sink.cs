@@ -61,6 +61,16 @@ public static class Sink
         finally { _inProbe = false; }
     }
 
+    // Return capture: injected before ret as `dup; ldstr label; call TraceReturn`.
+    public static void TraceReturn(object? value, string label)
+    {
+        if (_inProbe) return;
+        _inProbe = true;
+        try { Write($"{DateTime.UtcNow:HH:mm:ss.fff}  {label}  => {value}"); }
+        catch { }
+        finally { _inProbe = false; }
+    }
+
     public static void Trace(string label)
     {
         if (_inProbe) return;

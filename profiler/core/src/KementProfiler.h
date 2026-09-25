@@ -194,7 +194,7 @@ private:
     std::wstring attachDeny_;   // first deny substring
 
     // Generic hook engine (KEMENT_HOOKS config file).
-    enum class HookAction { ReturnConst, ReturnNull, Throw, Trace, TraceThis, TraceArg, Canary };
+    enum class HookAction { ReturnConst, ReturnNull, Throw, Trace, TraceThis, TraceArg, Canary, TraceReturn };
     struct HookDef {
         std::wstring type, method;
         HookAction action;
@@ -206,8 +206,8 @@ private:
     };
     std::vector<HookDef> hooks_;
     bool hooksEnabled_ = false;
-    struct HookSite { size_t hookIndex; mdToken getterToken; mdString labelUs; mdString msgUs; };
+    struct HookSite { size_t hookIndex; mdToken getterToken; mdString labelUs; mdString msgUs; bool refReturn; };
     std::map<std::pair<ModuleID, mdMethodDef>, HookSite> hookMethods_;
-    struct ProbeRefs { mdToken hit; mdToken trace2; mdToken trace1; mdToken canary; mdToken fail; };
+    struct ProbeRefs { mdToken hit; mdToken trace2; mdToken trace1; mdToken canary; mdToken fail; mdToken traceReturn; };
     std::map<ModuleID, ProbeRefs> probeRefsByModule_;
 };
