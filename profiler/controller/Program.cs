@@ -42,6 +42,7 @@ internal static class Program
         if (opt.ContainsKey("tripwire"))                sb.Append("TRIPWIRE=1\n");
         if (opt.TryGetValue("mode", out string? mode))  sb.Append("MODE=").Append(mode).Append('\n');
         if (opt.TryGetValue("deny", out string? deny))  sb.Append("DENY=").Append(deny).Append('\n');
+        if (opt.TryGetValue("hooks", out string? hooks)) sb.Append("HOOKS=").Append(Path.GetFullPath(hooks)).Append('\n');
         byte[] clientData = Encoding.Unicode.GetBytes(sb.ToString());
 
         Console.WriteLine($"[kement] attaching Core to pid {pid}");
@@ -95,6 +96,7 @@ internal static class Program
             attach loads the Kement Core into an already-running .NET process.
               --dump <dir>   dump in-memory assemblies loaded after attach
               --tripwire     instrument file sinks and log hits to the target's stdout
+              --hooks <file> apply a hooks config (e.g. flip a method's return) live
             """);
         return err is null ? 0 : 64;
     }

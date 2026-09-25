@@ -81,6 +81,7 @@ void KementProfiler::ApplyConfigString(const std::wstring& settings) {
         else if (key == L"TRIPWIRE")     tripwireEnabled_ = (val == L"1");
         else if (key == L"MODE")         attachMode_ = val;
         else if (key == L"DENY")         attachDeny_ = val;
+        else if (key == L"HOOKS")        LoadHooks(val);
     }
 }
 
@@ -198,8 +199,8 @@ HRESULT KementProfiler::InitializeForAttach(IUnknown* pCorProfilerInfoUnk,
 HRESULT KementProfiler::ProfilerAttachComplete() {
     // Modules loaded before we attached never fire ModuleLoadFinished, so sweep
     // them now (this is where CoreLib's already-loaded file sinks get hooked).
-    if (tripwireEnabled_ && info10_) {
-        KLOG("Attach complete: sweeping already-loaded modules for sinks");
+    if ((tripwireEnabled_ || hooksEnabled_) && info10_) {
+        KLOG("Attach complete: sweeping already-loaded modules");
         InstrumentLoadedModules();
     }
     return S_OK;
@@ -446,7 +447,10 @@ void KementProfiler::InstrumentLoadedModules() {
     ModuleID ids[64];
     ULONG got = 0;
     while (SUCCEEDED(en->Next(64, ids, &got)) && got > 0) {
-        for (ULONG i = 0; i < got; ++i) InstrumentSinks(ids[i]);
+        for (ULONG i = 0; i < got; ++i) {
+            if (tripwireEnabled_) InstrumentSinks(ids[i]);
+            if (hooksEnabled_) InstrumentHooks(ids[i]);
+        }
         if (got < 64) break;
     }
     en->Release();
