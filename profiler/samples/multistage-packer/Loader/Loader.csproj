@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Loader</AssemblyName>
+    <RootNamespace>Loader</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="stage2.enc" Condition="Exists('stage2.enc')">
+      <LogicalName>stage2.enc</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

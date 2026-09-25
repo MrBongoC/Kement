@@ -1,0 +1,2 @@
+# Inject a failure into FetchData every time it is called (uses the managed probe).
+ChaosDemo.Worker.FetchData | throw | simulated network outage

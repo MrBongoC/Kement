@@ -1,0 +1,2 @@
+# Log every prompt the app sends to the model (arg0 of Complete).
+LlmDemo.LlmClient.Complete | trace

@@ -1,0 +1,3 @@
+# Trace these methods and their first (string) argument. Uses the managed probe.
+TraceDemo.Service.Login  | trace
+TraceDemo.Service.Charge | trace

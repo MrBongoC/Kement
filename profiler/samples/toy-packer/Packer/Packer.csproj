@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Packer</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- payload.enc is produced by pack.ps1 before this project is built. -->
+    <EmbeddedResource Include="payload.enc" Condition="Exists('payload.enc')">
+      <LogicalName>payload.enc</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+# Trace every SQL statement by logging this.CommandText at the command executor.
+Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader   | tracethis | CommandText
+Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery | tracethis | CommandText
+
+# HTTP works the same way with tracearg (log a property of an argument). Example
+# (not run in this demo; needs a live HTTP call):
+#   System.Net.Http.HttpClient.Send | tracearg | 1 | System.Net.Http.HttpRequestMessage | RequestUri

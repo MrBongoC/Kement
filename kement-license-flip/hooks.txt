@@ -1,0 +1,2 @@
+# Flip the license check to always return true (no probe assembly needed).
+PremiumApp.License.IsPremium | returnbool | 1

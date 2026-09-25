@@ -1,0 +1,11 @@
+# build output
+**/bin/
+**/obj/
+**/build/
+.vs/
+
+# kement runtime output
+*.log
+
+# generated toy ciphertext (produced by pack scripts)
+*.enc

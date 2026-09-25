@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>MultiPacker</AssemblyName>
+    <RootNamespace>MultiPacker</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="stage1.enc" Condition="Exists('stage1.enc')">
+      <LogicalName>stage1.enc</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

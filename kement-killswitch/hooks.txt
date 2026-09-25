@@ -1,0 +1,2 @@
+# Kill a feature flag on a running process (no probe needed).
+KillDemo.Feature.IsEnabled | returnbool | 0

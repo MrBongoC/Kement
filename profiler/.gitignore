@@ -1,0 +1,12 @@
+# native build
+core/build/
+
+# .NET build output
+**/bin/
+**/obj/
+
+# toy-packer generated ciphertext (produced by pack.ps1)
+samples/toy-packer/Packer/payload.enc
+
+# kement runtime output
+*.log

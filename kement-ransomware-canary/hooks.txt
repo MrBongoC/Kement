@@ -1,0 +1,3 @@
+# Count destructive file ops; the probe alerts when the rate exceeds KEMENT_CANARY_RATE.
+System.IO.File.WriteAllText | canary
+System.IO.File.Delete       | canary
