@@ -49,6 +49,23 @@ inline bool SkipType(const BYTE*& p, const BYTE* end) {
     }
 }
 
+// True if the method's return type is a reference type (so a captured return
+// value can be treated as `object` without boxing).
+inline bool ReturnIsReference(PCCOR_SIGNATURE sig, ULONG len) {
+    if (sig == nullptr || len < 3) return false;
+    const BYTE* p = sig;
+    BYTE callconv = *p++;
+    if (callconv & IMAGE_CEE_CS_CALLCONV_GENERIC) UncompressData(p);
+    UncompressData(p);   // param count
+    while (p < sig + len && (*p == ELEMENT_TYPE_CMOD_OPT || *p == ELEMENT_TYPE_CMOD_REQD)) {
+        ++p; UncompressData(p);
+    }
+    if (p >= sig + len) return false;
+    BYTE t = *p;
+    return t == ELEMENT_TYPE_STRING || t == ELEMENT_TYPE_OBJECT || t == ELEMENT_TYPE_CLASS ||
+           t == ELEMENT_TYPE_SZARRAY || t == ELEMENT_TYPE_ARRAY;
+}
+
 inline bool IsStaticStringArg0(PCCOR_SIGNATURE sig, ULONG len) {
     if (sig == nullptr || len < 3) return false;
     const BYTE* p = sig;

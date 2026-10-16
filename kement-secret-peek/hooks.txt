@@ -1,0 +1,2 @@
+# Capture what Reveal() returns (the app only prints it masked). Uses the probe.
+SecretApp.Secret.Reveal | tracereturn

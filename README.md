@@ -26,6 +26,8 @@ Every tool below points the same engine at a different job. Each folder has a
 | `kement-chaos` | Inject failures into a healthy method to test resilience | `throw` hook + probe |
 | `kement-ransomware-canary` | Alert when destructive file ops spike | `canary` hook + probe |
 | `kement-honeypot` | Full attack trail (sensitive ops + calling method) | tripwire monitor + probe |
+| `kement-live-crack` | Attach to a running app and flip its lock check live | `returnbool` hook over live attach |
+| `kement-secret-peek` | Read what a method returns, even when never printed | `tracereturn` hook (return capture) |
 
 Run any of them:
 

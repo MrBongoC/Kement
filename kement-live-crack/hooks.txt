@@ -1,0 +1,3 @@
+# Flip the vault's lock check to always return true. Pure IL, no probe needed,
+# so it works over live attach.
+VaultServer.Vault.Unlock | returnbool | 1

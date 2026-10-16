@@ -81,6 +81,7 @@ void KementProfiler::ApplyConfigString(const std::wstring& settings) {
         else if (key == L"TRIPWIRE")     tripwireEnabled_ = (val == L"1");
         else if (key == L"MODE")         attachMode_ = val;
         else if (key == L"DENY")         attachDeny_ = val;
+        else if (key == L"HOOKS")        LoadHooks(val);
     }
 }
 
@@ -198,8 +199,8 @@ HRESULT KementProfiler::InitializeForAttach(IUnknown* pCorProfilerInfoUnk,
 HRESULT KementProfiler::ProfilerAttachComplete() {
     // Modules loaded before we attached never fire ModuleLoadFinished, so sweep
     // them now (this is where CoreLib's already-loaded file sinks get hooked).
-    if (tripwireEnabled_ && info10_) {
-        KLOG("Attach complete: sweeping already-loaded modules for sinks");
+    if ((tripwireEnabled_ || hooksEnabled_) && info10_) {
+        KLOG("Attach complete: sweeping already-loaded modules");
         InstrumentLoadedModules();
     }
     return S_OK;
@@ -446,7 +447,10 @@ void KementProfiler::InstrumentLoadedModules() {
     ModuleID ids[64];
     ULONG got = 0;
     while (SUCCEEDED(en->Next(64, ids, &got)) && got > 0) {
-        for (ULONG i = 0; i < got; ++i) InstrumentSinks(ids[i]);
+        for (ULONG i = 0; i < got; ++i) {
+            if (tripwireEnabled_) InstrumentSinks(ids[i]);
+            if (hooksEnabled_) InstrumentHooks(ids[i]);
+        }
         if (got < 64) break;
     }
     en->Release();
@@ -492,6 +496,7 @@ void KementProfiler::LoadHooks(const std::wstring& path) {
         else if (a == L"tracethis")  { h.action = HookAction::TraceThis; h.getter = p.size() > 2 ? p[2] : L""; }
         else if (a == L"tracearg")   { h.action = HookAction::TraceArg; h.argIndex = p.size() > 2 ? _wtoi(p[2].c_str()) : 0; h.argType = p.size() > 3 ? p[3] : L""; h.getter = p.size() > 4 ? p[4] : L""; }
         else if (a == L"canary")     { h.action = HookAction::Canary; }
+        else if (a == L"tracereturn"){ h.action = HookAction::TraceReturn; }
         else continue;
         hooks_.push_back(h);
     }
@@ -512,7 +517,7 @@ bool KementProfiler::EnsureProbeRefs(ModuleID moduleId, ProbeRefs* out) {
     if (FAILED(info_->GetModuleMetaData(moduleId, ofRead | ofWrite, IID_IMetaDataAssemblyEmit, reinterpret_cast<IUnknown**>(&asmEmit))) || !asmEmit) {
         emit->Release(); return false;
     }
-    ProbeRefs r{ mdTokenNil, mdTokenNil, mdTokenNil, mdTokenNil, mdTokenNil };
+    ProbeRefs r{ mdTokenNil, mdTokenNil, mdTokenNil, mdTokenNil, mdTokenNil, mdTokenNil };
     ASSEMBLYMETADATA amd = {0}; amd.usMajorVersion = 1;
     mdAssemblyRef asmRef = mdTokenNil;
     mdTypeRef typeRef = mdTokenNil;
@@ -522,11 +527,13 @@ bool KementProfiler::EnsureProbeRefs(ModuleID moduleId, ProbeRefs* out) {
         const BYTE sTrace2[] = { 0x00, 0x02, ELEMENT_TYPE_VOID, ELEMENT_TYPE_STRING, ELEMENT_TYPE_OBJECT };
         const BYTE sTrace1[] = { 0x00, 0x01, ELEMENT_TYPE_VOID, ELEMENT_TYPE_STRING };
         const BYTE sFail[]   = { 0x00, 0x01, ELEMENT_TYPE_VOID, ELEMENT_TYPE_STRING };
-        emit->DefineMemberRef(typeRef, L"Hit",    sHit,    sizeof(sHit),    &r.hit);
-        emit->DefineMemberRef(typeRef, L"Trace",  sTrace2, sizeof(sTrace2), &r.trace2);
-        emit->DefineMemberRef(typeRef, L"Trace",  sTrace1, sizeof(sTrace1), &r.trace1);
-        emit->DefineMemberRef(typeRef, L"Canary", sHit,    sizeof(sHit),    &r.canary);
-        emit->DefineMemberRef(typeRef, L"Fail",   sFail,   sizeof(sFail),   &r.fail);
+        const BYTE sTraceR[] = { 0x00, 0x02, ELEMENT_TYPE_VOID, ELEMENT_TYPE_OBJECT, ELEMENT_TYPE_STRING };
+        emit->DefineMemberRef(typeRef, L"Hit",         sHit,    sizeof(sHit),    &r.hit);
+        emit->DefineMemberRef(typeRef, L"Trace",       sTrace2, sizeof(sTrace2), &r.trace2);
+        emit->DefineMemberRef(typeRef, L"Trace",       sTrace1, sizeof(sTrace1), &r.trace1);
+        emit->DefineMemberRef(typeRef, L"Canary",      sHit,    sizeof(sHit),    &r.canary);
+        emit->DefineMemberRef(typeRef, L"Fail",        sFail,   sizeof(sFail),   &r.fail);
+        emit->DefineMemberRef(typeRef, L"TraceReturn", sTraceR, sizeof(sTraceR), &r.traceReturn);
     }
     if (attached_) info_->ApplyMetaData(moduleId);
     emit->Release(); asmEmit->Release();
@@ -555,7 +562,7 @@ void KementProfiler::InstrumentHooks(ModuleID moduleId) {
         while (SUCCEEDED(import->EnumMethodsWithName(&en, td, h.method.c_str(), methods, 64, &got)) && got > 0) {
             for (ULONG i = 0; i < got; ++i) {
                 mdMethodDef m = methods[i];
-                HookSite site{ hi, mdTokenNil, mdTokenNil, mdTokenNil };
+                HookSite site{ hi, mdTokenNil, mdTokenNil, mdTokenNil, false };
 
                 // Label + message user strings (probe-based actions).
                 if (emit && h.action != HookAction::ReturnConst && h.action != HookAction::ReturnNull) {
@@ -565,6 +572,11 @@ void KementProfiler::InstrumentHooks(ModuleID moduleId) {
                         emit->DefineUserString(h.sval.c_str(), static_cast<ULONG>(h.sval.size()), &site.msgUs);
                     ProbeRefs pr{};
                     EnsureProbeRefs(moduleId, &pr);
+                }
+                if (h.action == HookAction::TraceReturn) {
+                    DWORD attr2 = 0; PCCOR_SIGNATURE ps2 = nullptr; ULONG cs2 = 0;
+                    if (SUCCEEDED(import->GetMethodProps(m, nullptr, nullptr, 0, nullptr, &attr2, &ps2, &cs2, nullptr, nullptr)))
+                        site.refReturn = sig::ReturnIsReference(ps2, cs2);
                 }
                 // Resolve a property getter for trace-prop actions.
                 if (h.action == HookAction::TraceThis && !h.getter.empty()) {
@@ -716,7 +728,7 @@ HRESULT KementProfiler::GetReJITParameters(ModuleID moduleId, mdMethodDef method
                                            ICorProfilerFunctionControl* pFunctionControl) {
     // Generic hook engine takes precedence.
     {
-        HookSite site{ 0, mdTokenNil, mdTokenNil, mdTokenNil };
+        HookSite site{ 0, mdTokenNil, mdTokenNil, mdTokenNil, false };
         bool isHook = false;
         {
             std::lock_guard<std::mutex> lock(sinkMutex_);
@@ -731,6 +743,15 @@ HRESULT KementProfiler::GetReJITParameters(ModuleID moduleId, mdMethodDef method
                 BYTE buf[16]; ULONG n = BuildReturnConstBody(buf, h.ival); body.assign(buf, buf + n); built = true;
             } else if (h.action == HookAction::ReturnNull) {
                 BuildReturnNullBody(body); built = true;
+            } else if (h.action == HookAction::TraceReturn) {
+                LPCBYTE hdr = nullptr; ULONG sz = 0;
+                if (!site.refReturn) {
+                    KLOG("Hook: token=0x%08x tracereturn skipped (return type is not a reference type)", methodId);
+                } else if (SUCCEEDED(info_->GetILFunctionBody(moduleId, methodId, &hdr, &sz)) && hdr) {
+                    ProbeRefs pr{}; EnsureProbeRefs(moduleId, &pr);
+                    built = BuildReturnCaptureBody(hdr, site.labelUs, pr.traceReturn, body);
+                    if (!built) KLOG("Hook: token=0x%08x tracereturn skipped (multi-exit or has EH; needs full rewriter)", methodId);
+                }
             } else {
                 LPCBYTE hdr = nullptr; ULONG sz = 0;
                 if (SUCCEEDED(info_->GetILFunctionBody(moduleId, methodId, &hdr, &sz)) && hdr) {
